@@ -1,0 +1,1631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Valid8 Transcriber: The Game</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    color: #00ff88;
+  }
+  #title-screen, #game-over-screen, #win-screen, #level-complete-screen, #char-select-screen {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #0a0a0a;
+    z-index: 10;
+  }
+  h1 { font-size: 34px; color: #00ff88; text-shadow: 0 0 10px #00ff88; margin-bottom: 8px; }
+  h2 { font-size: 26px; color: #ff4444; text-shadow: 0 0 10px #ff4444; margin-bottom: 8px; }
+  .subtitle { font-size: 15px; color: #888; margin-bottom: 30px; }
+  .instructions { font-size: 14px; color: #aaa; text-align: center; line-height: 1.9; max-width: 480px; margin-bottom: 28px; }
+  .instructions strong { color: #ffcc00; }
+  .btn {
+    background: transparent;
+    border: 2px solid #00ff88;
+    color: #00ff88;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    padding: 10px 30px;
+    cursor: pointer;
+    text-shadow: 0 0 8px #00ff88;
+    box-shadow: 0 0 12px #00ff8844;
+    transition: all 0.1s;
+  }
+  .btn:hover { background: #00ff8822; box-shadow: 0 0 20px #00ff88; }
+  #char-select-screen {
+    gap: 32px;
+  }
+  .char-cards {
+    display: flex;
+    gap: 32px;
+    margin: 20px 0 28px;
+  }
+  .char-card {
+    border: 2px solid #333;
+    padding: 20px 18px;
+    width: 172px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.12s;
+    background: #0d0d0d;
+  }
+  .char-card:hover { border-color: #00ff88; box-shadow: 0 0 18px #00ff8833; background: #0f1a12; }
+  .char-card.selected { border-color: #00ff88; box-shadow: 0 0 22px #00ff8866; }
+  .char-card canvas { image-rendering: pixelated; margin-bottom: 10px; }
+  .char-name { font-size: 22px; color: #00ff88; margin-bottom: 4px; }
+  .char-tagline { font-size: 13px; color: #888; margin-bottom: 12px; }
+  .char-warning { font-size: 12px; color: #ffaa44; line-height: 1.7; border-top: 1px solid #222; padding-top: 10px; }
+  #canvas-wrap { position: relative; }
+  canvas { display: block; image-rendering: pixelated; }
+  #hud {
+    width: 640px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background: #111;
+    border: 1px solid #333;
+    border-bottom: none;
+    font-size: 12px;
+  }
+  .hud-label { color: #666; margin-right: 4px; }
+  #energy-bar-wrap { display: flex; align-items: center; gap: 6px; }
+  #energy-bar-bg { width: 120px; height: 12px; background: #222; border: 1px solid #444; }
+  #energy-bar { height: 100%; width: 100%; background: #00ff88; transition: width 0.1s, background 0.3s; }
+  #timer-display { font-size: 18px; color: #ffcc00; text-shadow: 0 0 6px #ffcc00; }
+  #score-display { color: #00aaff; }
+  #task-display { color: #ff88ff; font-size: 11px; max-width: 200px; text-align: right; }
+  #notification {
+    width: 640px;
+    background: #ff000044;
+    border: 2px solid #ff4444;
+    border-top: none;
+    color: #ffaaaa;
+    font-size: 13px;
+    text-align: center;
+    padding: 7px 8px;
+    font-family: 'Courier New', monospace;
+    visibility: hidden;
+    box-sizing: border-box;
+  }
+  #controls-hint { font-size: 10px; color: #444; margin-top: 6px; }
+  .stat { color: #ffcc00; font-size: 22px; margin: 6px 0; }
+</style>
+</head>
+<body>
+
+<div id="title-screen">
+  <h1>VALID8 TRANSCRIBER</h1>
+  <div class="subtitle">A Day in the Life of a Transcription Hero</div>
+  <div class="instructions">
+    <strong>GOAL:</strong> Walk from your desk to the Transcription Booth and back.<br>
+    Complete as many transcriptions as possible before time runs out!<br><br>
+    <strong>ARROW KEYS</strong> — Move your character<br>
+    <strong>SPACE</strong> — Dismiss obstacles / Interact<br><br>
+    <strong>⚡ OBSTACLES:</strong><br>
+    👔 <strong>CEO</strong> — Blocks your path with urgent tasks. Press SPACE!<br>
+    😤 <strong>Client</strong> — Claims there are mistakes. Go back to your desk!<br>
+    📢 <strong>Sales</strong> — Cuts your deadline! Move faster!<br><br>
+    <strong>Energy</strong> depletes as you walk and handle obstacles.<br>
+    If energy hits zero — you crash out!
+  </div>
+  <button class="btn" id="start-btn">▶  SELECT CHARACTER</button>
+</div>
+
+<div id="char-select-screen" style="display:none;">
+  <h1>SELECT YOUR CHARACTER</h1>
+  <div class="subtitle">Your choice shapes the chaos ahead</div>
+  <div class="char-cards">
+    <div class="char-card" id="card-julian">
+      <canvas id="preview-julian" width="48" height="72"></canvas>
+      <div class="char-name">JULIAN</div>
+      <div class="char-tagline">Pro Transcriber</div>
+      <div class="char-warning">⚠ Watch out for LeBron Haters!<br>They'll stop you mid-route to argue basketball</div>
+    </div>
+    <div class="char-card" id="card-tom">
+      <canvas id="preview-tom" width="48" height="72"></canvas>
+      <div class="char-name">TOM</div>
+      <div class="char-tagline">Pro Transcriber</div>
+      <div class="char-warning">⚠ Watch out for veggies!<br>Bowls of vegetables will block your path</div>
+    </div>
+    <div class="char-card" id="card-tyler">
+      <canvas id="preview-tyler" width="48" height="72"></canvas>
+      <div class="char-name">TYLER</div>
+      <div class="char-tagline">Transcription Leader</div>
+      <div class="char-warning">⚠ Watch out for Slack messages!<br>Colleagues won't stop asking for help</div>
+    </div>
+  </div>
+  <button class="btn" id="char-confirm-btn" style="opacity:0.3;pointer-events:none" disabled>▶  START SHIFT</button>
+</div>
+
+<div id="game-over-screen" style="display:none;">
+  <h2>SHIFT OVER</h2>
+  <div class="subtitle" id="game-over-reason">You ran out of energy...</div>
+  <div class="stat" id="final-score"></div>
+  <div class="stat" id="final-tasks"></div>
+  <br>
+  <button class="btn" id="restart-btn">▶  TRY AGAIN</button>
+</div>
+
+<div id="level-complete-screen" style="display:none;">
+  <h1 style="color:#ffcc00;text-shadow:0 0 10px #ffcc00">LEVEL 1 COMPLETE!</h1>
+  <div class="subtitle">You survived the shift — but the AC just broke...</div>
+  <br>
+  <div class="stat" id="lc-score"></div>
+  <div class="stat" style="color:#ffaa00" id="lc-bonus"></div>
+  <div class="stat" style="color:#00ff88;font-size:22px" id="lc-total"></div>
+  <br>
+  <div style="border:1px solid #ff4400;padding:14px 24px;margin-bottom:24px;max-width:360px;text-align:center">
+    <div style="color:#ff6600;font-size:13px;margin-bottom:6px">🌡 LEVEL 2: AC OUT OF ORDER</div>
+    <div style="color:#aaa;font-size:11px;line-height:1.8">
+      It's 95°F in the office.<br>
+      Energy drains 25% faster &nbsp;|&nbsp; Obstacles hit harder
+    </div>
+  </div>
+  <button class="btn" style="border-color:#ff6600;color:#ff6600;box-shadow:0 0 14px #ff440044;font-size:15px" id="next-level-btn">🌡  FACE THE HEAT  →  LEVEL 2</button>
+  <br><br>
+  <button class="btn" style="border-color:#888;color:#aaa;font-size:12px" id="replay-l1-btn">↺  REPLAY LEVEL 1</button>
+</div>
+
+<div id="win-screen" style="display:none;">
+  <h1>SHIFT COMPLETE!</h1>
+  <div class="subtitle">You survived another day at Valid8!</div>
+  <div class="stat" id="win-score"></div>
+  <div class="stat" id="win-tasks"></div>
+  <div class="stat" style="color:#ffaa00" id="win-bonus"></div>
+  <div class="stat" style="color:#00ff88;font-size:26px" id="win-total"></div>
+  <br>
+  <button class="btn" id="restart-btn2">▶  PLAY AGAIN</button>
+</div>
+
+<div id="canvas-wrap" style="display:none;">
+  <div id="hud">
+    <div id="energy-bar-wrap">
+      <span class="hud-label">ENERGY</span>
+      <div id="energy-bar-bg"><div id="energy-bar"></div></div>
+    </div>
+    <div id="timer-display">60</div>
+    <div id="score-display">SCORE: 0</div>
+    <div id="level-display" style="font-size:11px;color:#aaa">LVL 1</div>
+    <div id="task-display">Head to transcription booth!</div>
+  </div>
+  <canvas id="gameCanvas" width="640" height="400"></canvas>
+  <div id="notification"></div>
+  <div id="controls-hint">ARROWS: move &nbsp;|&nbsp; SPACE: interact</div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// ── Pixel palette ────────────────────────────────────────────
+const C = {
+  floor:    '#c8b89a',
+  wall:     '#3a2f2a',
+  wallTop:  '#5a4a3a',
+  carpet:   '#7a6a9a',
+  desk:     '#8b5e3c',
+  deskTop:  '#a0744a',
+  computer: '#223344',
+  screen:   '#00aaff',
+  chair:    '#554455',
+  booth:    '#2a5a2a',
+  boothTop: '#3a8a3a',
+  water:    '#3388cc',
+  plant:    '#225522',
+  window:   '#aaddff',
+  windowFr: '#888',
+};
+
+// ── Character select ─────────────────────────────────────────
+const CHARS = {
+  julian: { skin: '#c8895a', hair: '#1a0a00', shirt: '#552288', pants: '#1a1a3a', name: 'JULIAN' },
+  tom:    { skin: '#f5c89a', hair: '#886633', shirt: '#336622', pants: '#3a3020', name: 'TOM'    },
+  tyler:  { skin: '#e8b48a', hair: '#ddbb22', shirt: '#1a4466', pants: '#2a2a3a', name: 'TYLER'  },
+};
+
+let selectedChar = null;
+
+function drawCharPreview(canvasId, charKey) {
+  const cv = document.getElementById(canvasId);
+  if (!cv) return;
+  const cx = cv.getContext('2d');
+  cx.clearRect(0, 0, 48, 72);
+  const c = CHARS[charKey];
+  const x = 12, y = 10;
+  // shadow
+  cx.globalAlpha = 0.2; cx.fillStyle = '#000';
+  cx.beginPath(); cx.ellipse(x+8, y+56, 10, 4, 0, 0, Math.PI*2); cx.fill();
+  cx.globalAlpha = 1;
+  // shoes
+  const pr = (f, g, w, h, col) => { cx.fillStyle = col; cx.fillRect(f, g, w, h); };
+  pr(x+2, y+44, 6, 5, '#221111'); pr(x+10, y+44, 6, 5, '#221111');
+  pr(x+2, y+34, 6, 12, c.pants);  pr(x+10, y+34, 6, 12, c.pants);
+  pr(x+1, y+22, 14, 14, c.shirt);
+  pr(x-2, y+22, 4, 10, c.shirt);  pr(x+14, y+22, 4, 10, c.shirt);
+  pr(x+2, y+10, 12, 14, c.skin);
+  pr(x+2, y+8,  12, 6,  c.hair);
+  pr(x+4, y+13, 2, 2, '#222'); pr(x+10, y+13, 2, 2, '#222');
+  // glasses
+  cx.fillStyle = 'rgba(150,220,255,0.4)';
+  cx.fillRect(x+3, y+12, 4, 3); cx.fillRect(x+9, y+12, 4, 3);
+  cx.fillStyle = '#888';
+  cx.fillRect(x+3, y+12, 4, 1); cx.fillRect(x+9, y+12, 4, 1);
+  cx.fillRect(x+7, y+13, 2, 1);
+  // notepad
+  pr(x+15, y+26, 6, 8, '#ffffcc'); pr(x+16, y+27, 4, 6, '#88aacc');
+  // name tag
+  cx.font = '7px "Courier New"'; cx.fillStyle = '#00ff88';
+  cx.fillText(c.name, 2, 70);
+}
+
+function selectChar(key) {
+  selectedChar = key;
+  document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('card-' + key).classList.add('selected');
+  const btn = document.getElementById('char-confirm-btn');
+  btn.style.opacity = '1'; btn.style.pointerEvents = 'auto'; btn.disabled = false;
+}
+
+function showCharSelect() {
+  ['title-screen','game-over-screen','win-screen','level-complete-screen','canvas-wrap']
+    .forEach(id => document.getElementById(id).style.display = 'none');
+  document.getElementById('char-select-screen').style.display = 'flex';
+  setTimeout(() => {
+    drawCharPreview('preview-julian', 'julian');
+    drawCharPreview('preview-tom', 'tom');
+    drawCharPreview('preview-tyler', 'tyler');
+  }, 30);
+}
+
+// ── Level config ─────────────────────────────────────────────
+const LEVEL_CONFIG = {
+  1: { walkDrain: 0.8,  idleDrain: 0.15, obstacleMin: 8000, obstacleRng: 8000, salesPenalty: 12, theme: 'normal' },
+  2: { walkDrain: 1.0,  idleDrain: 0.19, obstacleMin: 6400, obstacleRng: 6400, salesPenalty: 15, theme: 'hot'    },
+};
+
+// ── Game State ───────────────────────────────────────────────
+let state = {};
+
+function resetState(level = 1) {
+  state = {
+    level,
+    phase: 'playing',  // playing | blocked | returning | done
+    energy: 100,
+    score: 0,
+    tasks: 0,
+    timeLeft: 60,
+    timerInterval: null,
+    taskPhase: 'goToBooth', // goToBooth | goToDesk
+    obstacle: null,          // null | {type, handled}
+    obstacleTimer: 0,
+    notifTimeout: null,
+    salesActive: false,
+    flashTimer: 0,
+    waterCooldown: 0,
+    burritoCooldown: 0,
+    bossTimer: 15,
+    bossChecks: [],
+    bossScore: 0,
+    bossSpawnTimer: 0,
+    bossBriefcaseShake: 0,
+    character: selectedChar || 'julian',
+    charObstacle: null,
+    charObstacleTimer: 0,
+    keys: {},
+    player: { x: 240, y: 330, dir: 'down', frame: 0, animTimer: 0 },
+    npc: null,
+    particles: [],
+  };
+}
+
+// ── Layout constants ─────────────────────────────────────────
+const TILE = 32;
+const PLAYER_DESK  = { x: 176, y: 264, w: 64, h: 32 };
+const TRANS_BOOTH  = { x: 400, y: 72, w: 80, h: 48 };
+const INTERACT_RADIUS = 48;
+
+// ── Walls / collision rects ──────────────────────────────────
+const WALLS = [
+  { x: 0,   y: 0,   w: 640, h: 32  }, // top wall
+  { x: 0,   y: 368, w: 640, h: 32  }, // bottom wall
+  { x: 0,   y: 0,   w: 16,  h: 400 }, // left wall
+  { x: 624, y: 0,   w: 16,  h: 400 }, // right wall
+  // Desks
+  { x: 144, y: 256, w: 80, h: 48  },  // player desk
+  { x: 48,  y: 256, w: 80, h: 48  },  // coworker desk 1
+  { x: 48,  y: 160, w: 80, h: 48  },  // coworker desk 2
+  { x: 400, y: 64,  w: 80, h: 48  },  // transcription booth
+  { x: 520, y: 256, w: 80, h: 48  },  // filing cabinet
+  { x: 520, y: 160, w: 48, h: 64  },  // water cooler
+];
+
+// ── NPC spawn positions ──────────────────────────────────────
+const NPC_SPAWN = [
+  { x: 320, y: 200 }, // middle of office
+  { x: 250, y: 150 },
+  { x: 380, y: 300 },
+];
+
+// ── Helpers ──────────────────────────────────────────────────
+function rectOverlap(ax,ay,aw,ah, bx,by,bw,bh) {
+  return ax < bx+bw && ax+aw > bx && ay < by+bh && ay+ah > by;
+}
+function dist(ax,ay,bx,by) {
+  return Math.sqrt((ax-bx)**2 + (ay-by)**2);
+}
+function showNotif(msg, duration=2500) {
+  const el = document.getElementById('notification');
+  el.textContent = msg;
+  el.style.visibility = 'visible';
+  if (state.notifTimeout) clearTimeout(state.notifTimeout);
+  state.notifTimeout = setTimeout(() => el.style.visibility = 'hidden', duration);
+}
+
+// ── Drawing helpers ──────────────────────────────────────────
+function pixelRect(x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(x), Math.round(y), w, h);
+}
+function pixelText(text, x, y, color='#fff', size=8) {
+  ctx.font = `${size}px "Courier New"`;
+  ctx.fillStyle = color;
+  ctx.fillText(text, Math.round(x), Math.round(y));
+}
+function drawCheckerFloor(x, y, w, h, c1, c2, ts=16) {
+  for (let ty = y; ty < y+h; ty += ts) {
+    for (let tx = x; tx < x+w; tx += ts) {
+      const ci = (Math.floor((tx-x)/ts) + Math.floor((ty-y)/ts)) % 2;
+      ctx.fillStyle = ci === 0 ? c1 : c2;
+      ctx.fillRect(tx, ty, Math.min(ts, x+w-tx), Math.min(ts, y+h-ty));
+    }
+  }
+}
+
+// ── Draw office ──────────────────────────────────────────────
+function drawOffice() {
+  // Floor
+  drawCheckerFloor(16, 32, 608, 336, '#c8b89a', '#bda88a', 32);
+  // Carpet strip down middle
+  drawCheckerFloor(200, 32, 240, 336, '#9a8aaa', '#8a7a9a', 32);
+
+  // Windows on top wall
+  for (let wx = 80; wx < 600; wx += 120) {
+    pixelRect(wx, 2, 72, 22, C.window);
+    pixelRect(wx, 2, 72, 2, C.windowFr);
+    pixelRect(wx, 2, 2, 22, C.windowFr);
+    pixelRect(wx+70, 2, 2, 22, C.windowFr);
+    pixelRect(wx+36, 2, 2, 22, C.windowFr);
+    pixelText('VALID8 HQ', wx+4, 18, '#6699bb', 9);
+  }
+
+  // Top wall
+  pixelRect(0, 0, 640, 32, C.wall);
+  pixelRect(0, 28, 640, 4, C.wallTop);
+
+  // Walls
+  pixelRect(0, 0, 16, 400, C.wall);
+  pixelRect(624, 0, 16, 400, C.wall);
+  pixelRect(0, 368, 640, 32, C.wall);
+  pixelRect(0, 364, 640, 4, C.wallTop);
+
+  // ── Transcription Booth ──
+  pixelRect(392, 56, 96, 64, '#1a4a1a');
+  pixelRect(392, 56, 96, 6, '#2a7a2a');
+  pixelRect(400, 64, 80, 8, C.boothTop);
+  pixelRect(400, 72, 80, 40, C.booth);
+  // Screen — wide enough for text
+  pixelRect(404, 76, 72, 30, '#001800');
+  pixelRect(406, 78, 68, 26, '#003300');
+  ctx.font = '9px "Courier New"';
+  ctx.fillStyle = '#00ff88';
+  ctx.textAlign = 'center';
+  ctx.fillText('TRANSCRIBE', 440, 88);
+  ctx.fillText('[ BOOTH ]', 440, 100);
+  ctx.textAlign = 'left';
+
+  // ── Player Desk ──
+  drawDesk(144, 256, true);
+
+  // ── Coworker desks ──
+  drawDesk(48, 256, false);
+  drawDesk(48, 160, false);
+
+  // ── Filing cabinet ──
+  pixelRect(520, 256, 80, 80, '#556677');
+  pixelRect(520, 256, 80, 6, '#667788');
+  pixelRect(522, 268, 76, 20, '#445566');
+  pixelRect(522, 294, 76, 20, '#445566');
+  pixelRect(522, 320, 76, 20, '#445566');
+  pixelText('FILES', 540, 282, '#aabbcc', 8);
+
+  // ── Water cooler ──
+  pixelRect(520, 160, 48, 64, '#224466');
+  pixelRect(524, 164, 40, 30, C.water);
+  pixelRect(530, 166, 28, 26, '#55aadd');
+  pixelRect(524, 196, 16, 8, '#336688');
+  pixelRect(548, 196, 12, 8, '#336688');
+  pixelText('H2O', 530, 185, '#fff', 9);
+  // Ready/cooldown indicator
+  if (state.waterCooldown > 0) {
+    pixelRect(518, 228, 48, 10, '#331100');
+    const w = Math.round(48 * (1 - state.waterCooldown / 12));
+    pixelRect(518, 228, w, 10, '#ff8800');
+    pixelText('COOLDOWN', 519, 237, '#ffffff', 8);
+  } else {
+    pixelRect(518, 228, 48, 10, '#004433');
+    pixelRect(518, 228, 48, 10, '#00cc66');
+    pixelText('[ SPC ]', 523, 237, '#003322', 9);
+  }
+
+  // ── Illegal Pete's Break Table ──
+  // Table
+  pixelRect(284, 336, 72, 6, '#a07040');
+  pixelRect(284, 342, 72, 20, '#8a5c2a');
+  pixelRect(286, 360, 8, 8, '#6a3a1a');
+  pixelRect(342, 360, 8, 8, '#6a3a1a');
+  // Brown bag
+  pixelRect(296, 316, 24, 22, '#cc8833');
+  pixelRect(298, 314, 20, 4, '#aa6622');
+  pixelRect(298, 316, 20, 2, '#ffaa44');  // bag top fold
+  pixelRect(300, 320, 16, 14, '#bb7722');
+  // Burrito in foil (peeking out)
+  pixelRect(302, 308, 12, 12, '#c8c8b0');  // foil wrap
+  pixelRect(304, 310, 8, 8,  '#c8c8c0');
+  pixelRect(305, 311, 6, 6,  '#cc9944');   // tortilla peek
+  pixelRect(306, 312, 4, 4,  '#44aa44');   // filling peek
+  // Logo label on bag
+  pixelRect(298, 322, 18, 10, '#cc2200');
+  pixelText("I.P.", 301, 330, '#ffff00', 8);
+  // Cooldown / ready indicator
+  if (state.burritoCooldown > 0) {
+    pixelRect(272, 368, 88, 12, '#331100');
+    const bw = Math.round(88 * (1 - state.burritoCooldown / 25));
+    pixelRect(272, 368, bw, 12, '#ff6600');
+    pixelText('DIGESTING...', 275, 378, '#ffffff', 9);
+  } else {
+    pixelRect(272, 368, 88, 12, '#003300');
+    pixelRect(272, 368, 88, 12, '#00cc44');
+    pixelText("PETE'S  [SPC]", 276, 378, '#003300', 9);
+  }
+
+  // ── Plant ──
+  pixelRect(580, 40, 20, 24, '#5a3a2a');
+  pixelRect(574, 28, 32, 20, C.plant);
+  pixelRect(578, 22, 24, 14, '#33aa33');
+  pixelRect(582, 18, 16, 10, '#55cc55');
+
+  // ── Coworkers ──
+  drawCoworker(48, 256, { skin:'#f5c89a', hair:'#cc4400', shirt:'#226644' }, 'Maya');
+  drawCoworker(48, 160, { skin:'#c8895a', hair:'#111111', shirt:'#663388' }, 'Dev');
+
+  // ── Desk name labels ──
+  pixelText('YOUR DESK', 148, 252, '#ffcc44', 8);
+}
+
+function drawDesk(x, y, isPlayer) {
+  pixelRect(x, y, 80, 8, C.deskTop);
+  pixelRect(x, y+8, 80, 40, C.desk);
+  // Legs
+  pixelRect(x+4, y+40, 8, 8, '#6a3a1a');
+  pixelRect(x+68, y+40, 8, 8, '#6a3a1a');
+  // Computer monitor
+  pixelRect(x+20, y-20, 40, 28, C.computer);
+  pixelRect(x+22, y-18, 36, 22, isPlayer ? '#0088cc' : '#005577');
+  if (isPlayer) {
+    pixelText('VALID8', x+28, y-6, '#00ccff', 8);
+    pixelText('.DOC', x+32, y+3, '#0099ff', 7);
+  }
+  pixelRect(x+36, y+8, 8, 4, '#333');
+  // Chair
+  pixelRect(x+24, y+52, 32, 24, C.chair);
+  pixelRect(x+20, y+52, 40, 6, '#665566');
+}
+
+// ── Level 2: Heat overlay ─────────────────────────────────────
+function drawHeatOverlay() {
+  // Warm floor tint
+  ctx.fillStyle = 'rgba(255, 90, 0, 0.10)';
+  ctx.fillRect(16, 32, 608, 336);
+
+  // Heat shimmer lines rising from floor
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 9; i++) {
+    const x = 40 + i * 68;
+    const phase = (Date.now() / 700 + i * 0.9);
+    ctx.strokeStyle = `rgba(255, 140, 0, 0.13)`;
+    ctx.beginPath();
+    for (let y = 355; y > 180; y -= 3) {
+      const wx = x + Math.sin(phase + y * 0.04) * 5;
+      if (y === 355) ctx.moveTo(wx, y); else ctx.lineTo(wx, y);
+    }
+    ctx.stroke();
+  }
+
+  // Broken AC unit on top wall (centre)
+  const ax = 296, ay = 4;
+  pixelRect(ax, ay, 48, 22, '#445566');
+  pixelRect(ax+2, ay+2, 44, 18, '#2a3a44');
+  for (let i = 0; i < 5; i++) pixelRect(ax+4+i*8, ay+5, 5, 12, '#1a2a33');
+  // red X
+  ctx.strokeStyle = '#ff2200';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(ax+4, ay+4); ctx.lineTo(ax+44, ay+18); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ax+44, ay+4); ctx.lineTo(ax+4, ay+18); ctx.stroke();
+
+  // Warning banner below top wall
+  pixelRect(160, 32, 320, 13, '#882200');
+  pixelRect(162, 33, 316, 11, '#cc3300');
+  pixelText('⚠  AC OUT OF ORDER  —  95°F IN HERE  ⚠', 168, 42, '#ffee00', 8);
+
+  // Thermometer (top-right corner)
+  const tx = 596, ty = 36;
+  pixelRect(tx, ty, 14, 50, '#2a2a2a');
+  pixelRect(tx+2, ty+2, 10, 46, '#111');
+  const heat = 0.75 + Math.sin(Date.now() / 1800) * 0.05;
+  const hh = Math.round(40 * heat);
+  pixelRect(tx+3, ty+4+(40-hh), 8, hh, '#ff3300');
+  pixelRect(tx+1, ty+50, 12, 12, '#ff3300'); // bulb
+  pixelRect(tx+3, ty+52, 8, 8, '#ff6600');
+  pixelText('95°F', tx-6, ty+72, '#ff6600', 8);
+
+  // Sweating coworkers indicator (small droplets near desks)
+  const t = Date.now() / 600;
+  [[76, 270], [76, 174]].forEach(([dx, dy], i) => {
+    const drop = (t + i) % 1;
+    if (drop < 0.5) {
+      ctx.fillStyle = `rgba(100,180,255,${0.7 - drop})`;
+      ctx.beginPath();
+      ctx.ellipse(dx + 40, dy + drop * 30, 2, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+}
+
+// ── Draw coworker (seated, typing) ───────────────────────────
+function drawCoworker(deskX, deskY, colors, name) {
+  // Seated in front of desk — chair is at deskX+24, deskY+52
+  const x = deskX + 28;
+  const y = deskY + 28;
+  const typing = Math.floor(Date.now() / 200) % 2;
+
+  // Shadow
+  ctx.globalAlpha = 0.15;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(x+8, y+34, 9, 3, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Legs (seated — shortened)
+  pixelRect(x+2, y+18, 6, 8, '#334455');
+  pixelRect(x+10, y+18, 6, 8, '#334455');
+  // Shoes on floor
+  pixelRect(x+1, y+24, 7, 5, '#221111');
+  pixelRect(x+9, y+24, 7, 5, '#221111');
+  // Body
+  pixelRect(x+1, y+8, 14, 12, colors.shirt);
+  // Arms reaching toward keyboard (typing animation)
+  pixelRect(x-2, y+10+typing, 4, 7, colors.shirt);
+  pixelRect(x+14, y+10-typing, 4, 7, colors.shirt);
+  pixelRect(x-2, y+16+typing, 4, 3, colors.skin);
+  pixelRect(x+14, y+16-typing, 4, 3, colors.skin);
+  // Head
+  pixelRect(x+2, y, 12, 10, colors.skin);
+  // Hair
+  pixelRect(x+2, y-2, 12, 5, colors.hair);
+  // Eyes (looking at screen — facing up)
+  pixelRect(x+4, y+3, 2, 2, '#222');
+  pixelRect(x+10, y+3, 2, 2, '#222');
+  // Name tag
+  pixelText(name, x+1, y-4, '#aaaaaa', 7);
+}
+
+// ── Draw player ──────────────────────────────────────────────
+function getPlayerColors() {
+  const ch = CHARS[state.character] || CHARS.julian;
+  return { skin: ch.skin, hair: ch.hair, shirt: ch.shirt, pants: '#334455', shoes: '#221111' };
+}
+
+function drawPlayer(x, y, dir, frame) {
+  const bob = frame % 2 === 0 ? 0 : -1;
+  const lx = Math.round(x), ly = Math.round(y) + bob;
+  const pc = getPlayerColors();
+
+  // Shadow
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(lx+8, ly+28, 10, 4, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Shoes
+  pixelRect(lx+2, ly+22, 6, 6, pc.shoes);
+  pixelRect(lx+10, ly+22, 6, 6, pc.shoes);
+  // Pants
+  pixelRect(lx+2, ly+14, 6, 10, pc.pants);
+  pixelRect(lx+10, ly+14, 6, 10, pc.pants);
+  // Shirt body
+  pixelRect(lx+1, ly+6, 14, 10, pc.shirt);
+  // Arms (animated)
+  const armSwing = frame % 2 === 0 ? 0 : 2;
+  pixelRect(lx-2, ly+6+armSwing, 4, 8, pc.shirt);
+  pixelRect(lx+14, ly+6-armSwing, 4, 8, pc.shirt);
+  // Hands
+  pixelRect(lx-2, ly+14+armSwing, 4, 4, pc.skin);
+  pixelRect(lx+14, ly+14-armSwing, 4, 4, pc.skin);
+  // Head
+  pixelRect(lx+2, ly-2, 12, 10, pc.skin);
+  // Hair
+  pixelRect(lx+2, ly-4, 12, 6, pc.hair);
+  // Eyes (direction based)
+  if (dir === 'down' || dir === 'left' || dir === 'right') {
+    pixelRect(lx+4, ly+2, 2, 2, '#222');
+    pixelRect(lx+10, ly+2, 2, 2, '#222');
+  }
+  // Glasses
+  pixelRect(lx+3, ly+1, 4, 3, 'rgba(150,220,255,0.4)');
+  pixelRect(lx+9, ly+1, 4, 3, 'rgba(150,220,255,0.4)');
+  pixelRect(lx+3, ly+1, 4, 1, '#888');
+  pixelRect(lx+9, ly+1, 4, 1, '#888');
+  pixelRect(lx+7, ly+2, 2, 1, '#888');
+  // Notepad in hand
+  pixelRect(lx+15, ly+8, 6, 8, '#ffffcc');
+  pixelRect(lx+16, ly+9, 4, 6, '#88aacc');
+}
+
+// ── Draw NPC ─────────────────────────────────────────────────
+const NPC_STYLES = {
+  ceo:    { shirt: '#880000', hair: '#888888', label: 'CEO',   emoji: '👔', color: '#ff4444' },
+  client: { shirt: '#006600', hair: '#aa6600', label: 'CLIENT',emoji: '😤', color: '#ffaa00' },
+  sales:  { shirt: '#660088', hair: '#ffaa00', label: 'SALES', emoji: '📢', color: '#ff88ff' },
+};
+
+function drawNPC(npc) {
+  if (!npc || npc.dismissed) return;
+  const { x, y, type } = npc;
+  const s = NPC_STYLES[type];
+  const bob = Math.sin(Date.now()/200) * 1;
+  const lx = Math.round(x), ly = Math.round(y + bob);
+
+  // Glow
+  ctx.shadowColor = s.color;
+  ctx.shadowBlur = 12;
+
+  // Shadow
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(lx+8, ly+28, 10, 4, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  pixelRect(lx+2, ly+22, 6, 6, '#221111');
+  pixelRect(lx+10, ly+22, 6, 6, '#221111');
+  pixelRect(lx+2, ly+14, 6, 10, '#334');
+  pixelRect(lx+10, ly+14, 6, 10, '#334');
+  pixelRect(lx+1, ly+6, 14, 10, s.shirt);
+  pixelRect(lx-2, ly+6, 4, 8, s.shirt);
+  pixelRect(lx+14, ly+6, 4, 8, s.shirt);
+  pixelRect(lx-2, ly+14, 4, 4, '#f5c89a');
+  pixelRect(lx+14, ly+14, 4, 4, '#f5c89a');
+  pixelRect(lx+2, ly-2, 12, 10, '#f5c89a');
+  pixelRect(lx+2, ly-4, 12, 6, s.hair);
+  pixelRect(lx+4, ly+2, 2, 2, '#222');
+  pixelRect(lx+10, ly+2, 2, 2, '#222');
+
+  ctx.shadowBlur = 0;
+
+  // Speech bubble
+  const bw = 136, bh = 58;
+  const bx = lx - 52, by = ly - 72;
+  ctx.fillStyle = '#ffff99';
+  ctx.strokeStyle = s.color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(bx, by, bw, bh, 6);
+  ctx.fill();
+  ctx.stroke();
+  // Tail
+  ctx.fillStyle = '#ffff99';
+  ctx.beginPath();
+  ctx.moveTo(lx+4, ly-14);
+  ctx.lineTo(lx+8, by+bh);
+  ctx.lineTo(lx+14, ly-14);
+  ctx.fill();
+
+  ctx.font = '11px "Courier New"';
+  ctx.fillStyle = '#222';
+  const msgs = {
+    ceo:    ['URGENT: Update', 'compliance docs', 'RIGHT NOW! [SPC]'],
+    client: ['I found 12', 'mistakes! Go fix', 'them! [SPC]'],
+    sales:  ['Client needs', 'this in 5 mins!', 'HURRY UP! [SPC]'],
+  };
+  msgs[type].forEach((line, i) => ctx.fillText(line, bx+6, by+16+i*14));
+
+  // Label badge
+  pixelRect(lx, ly-82, 22, 12, s.color);
+  ctx.font = '8px "Courier New"';
+  ctx.fillStyle = '#fff';
+  ctx.fillText(s.label, lx+2, ly-60);
+}
+
+// ── LeBron Hater NPC ─────────────────────────────────────────
+const HATER_LINES = [
+  ["Jordan had 6 rings!", "LeBron has 4.", "Sit down! [SPC]"],
+  ["He LEFT Cleveland!", "Straight betrayal.", "Traitor! [SPC]"],
+  ["He flopped AGAIN!", "So dramatic bro.", "SMH! [SPC]"],
+  ["The Decision was", "cringe content.", "Horrible! [SPC]"],
+  ["Curry > LeBron", "all day every day.", "Facts! [SPC]"],
+  ["Space Jam 2 was", "genuinely awful.", "Yikes! [SPC]"],
+];
+
+function drawHater(npc) {
+  if (!npc || npc.dismissed) return;
+  const { x, y } = npc;
+  const bob = Math.sin(Date.now() / 200) * 1;
+  const lx = Math.round(x), ly = Math.round(y + bob);
+  ctx.shadowColor = '#ff4444'; ctx.shadowBlur = 10;
+  // body — Jordan 23 jersey (red)
+  pixelRect(lx+2, ly+22, 6, 6, '#221111'); pixelRect(lx+10, ly+22, 6, 6, '#221111');
+  pixelRect(lx+2, ly+14, 6, 10, '#1a1a2a'); pixelRect(lx+10, ly+14, 6, 10, '#1a1a2a');
+  pixelRect(lx+1, ly+6, 14, 10, '#cc0000');
+  pixelRect(lx+7, ly+8, 2, 6, '#ffffff'); // jersey number area
+  pixelRect(lx-2, ly+6, 4, 8, '#cc0000'); pixelRect(lx+14, ly+6, 4, 8, '#cc0000');
+  pixelRect(lx-2, ly+14, 4, 4, '#f5c89a'); pixelRect(lx+14, ly+14, 4, 4, '#f5c89a');
+  pixelRect(lx+2, ly-2, 12, 10, '#f5c89a');
+  pixelRect(lx+2, ly-4, 12, 6, '#222233');
+  pixelRect(lx+4, ly+2, 2, 2, '#222'); pixelRect(lx+10, ly+2, 2, 2, '#222');
+  ctx.shadowBlur = 0;
+  // speech bubble
+  const lines = npc.lines;
+  const bw = 136, bh = 58, bx = lx - 52, by = ly - 76;
+  ctx.fillStyle = '#fff0f0'; ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff0f0';
+  ctx.beginPath(); ctx.moveTo(lx+4, ly-14); ctx.lineTo(lx+8, by+bh); ctx.lineTo(lx+14, ly-14); ctx.fill();
+  ctx.font = '11px "Courier New"'; ctx.fillStyle = '#880000';
+  lines.forEach((l, i) => ctx.fillText(l, bx + 6, by + 16 + i * 14));
+  // badge
+  pixelRect(lx, ly - 82, 28, 12, '#cc0000');
+  ctx.font = '8px "Courier New"'; ctx.fillStyle = '#fff';
+  ctx.fillText('HATER', lx + 2, ly - 73);
+}
+
+// ── Veggie Bowl hazard ────────────────────────────────────────
+const VEGGIE_TYPES = [
+  { name: 'BROCCOLI', colors: ['#228822','#33aa33','#1a6611'] },
+  { name: 'SPINACH',  colors: ['#2d5a1b','#4a8a2a','#1a3a10'] },
+  { name: 'KALE',     colors: ['#1a5c2a','#2e8b3a','#0f3318'] },
+];
+
+function drawVeggieBowl(v) {
+  if (!v || v.dismissed) return;
+  const { x, y, vtype } = v;
+  const vc = VEGGIE_TYPES[vtype];
+  const pulse = 0.7 + Math.sin(Date.now() / 300) * 0.3;
+  ctx.shadowColor = vc.colors[0]; ctx.shadowBlur = 8 * pulse;
+  // bowl
+  pixelRect(x+2, y+14, 24, 12, '#d4a870');
+  pixelRect(x+4, y+16, 20, 8,  '#c8944a');
+  pixelRect(x+2, y+24, 24, 4,  '#b07830');
+  // veggies piled up
+  pixelRect(x+4, y+6,  20, 12, vc.colors[0]);
+  pixelRect(x+6, y+4,  16, 8,  vc.colors[1]);
+  pixelRect(x+8, y+2,  12, 6,  vc.colors[2]);
+  pixelRect(x+10,y+0,   8, 5,  vc.colors[1]);
+  ctx.shadowBlur = 0;
+  // label
+  const bw = 96, bx2 = x - 18, by2 = y - 26;
+  ctx.fillStyle = '#fffff0'; ctx.strokeStyle = '#44aa44'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(bx2, by2, bw, 20, 3); ctx.fill(); ctx.stroke();
+  ctx.font = '11px "Courier New"'; ctx.fillStyle = '#224422';
+  ctx.fillText(vc.name + '! [SPC]', bx2 + 5, by2 + 14);
+}
+
+// ── Slack message obstacle (Tyler) ───────────────────────────
+const SLACK_LINES = [
+  ["hey quick q!", "u got a sec?", "URGENT!! [SPC]"],
+  ["can u help me", "with this thing?", "plzplzplz [SPC]"],
+  ["omg sry but,", "one more thing...", "need u!! [SPC]"],
+  ["@Tyler @Tyler", "@Tyler help!!", "respond pls [SPC]"],
+  ["not to bother", "but... actually", "yes bother [SPC]"],
+  ["lol tiny thing", "well... maybe not", "HELP [SPC]"],
+];
+
+function drawSlackMessage(npc) {
+  if (!npc || npc.dismissed) return;
+  const { x, y } = npc;
+  const bob = Math.sin(Date.now() / 200) * 1;
+  const lx = Math.round(x), ly = Math.round(y + bob);
+
+  ctx.shadowColor = '#4A154B'; ctx.shadowBlur = 12;
+
+  // Body — colleague in casual shirt
+  pixelRect(lx+2, ly+22, 6, 6, '#221111'); pixelRect(lx+10, ly+22, 6, 6, '#221111');
+  pixelRect(lx+2, ly+14, 6, 10, '#334'); pixelRect(lx+10, ly+14, 6, 10, '#334');
+  pixelRect(lx+1, ly+6, 14, 10, '#cc6600');
+  pixelRect(lx-2, ly+6, 4, 8, '#cc6600'); pixelRect(lx+14, ly+6, 4, 8, '#cc6600');
+  pixelRect(lx-2, ly+14, 4, 4, '#f5c89a'); pixelRect(lx+14, ly+14, 4, 4, '#f5c89a');
+  pixelRect(lx+2, ly-2, 12, 10, '#f5c89a');
+  pixelRect(lx+2, ly-4, 12, 6, '#443322');
+  pixelRect(lx+4, ly+2, 2, 2, '#222'); pixelRect(lx+10, ly+2, 2, 2, '#222');
+
+  // Phone in hand with Slack purple screen
+  pixelRect(lx+14, ly+8, 8, 12, '#222');
+  pixelRect(lx+15, ly+9, 6, 10, '#4A154B');
+  // Slack # symbol on screen
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 7px "Courier New"';
+  ctx.fillText('#', lx+16, ly+18);
+
+  // Notification pings (animated dots)
+  const ping = Math.floor(Date.now() / 400) % 3;
+  for (let i = 0; i <= ping; i++) {
+    pixelRect(lx+22+i*5, ly+6, 4, 4, '#ff4444');
+  }
+
+  ctx.shadowBlur = 0;
+
+  // Speech bubble
+  const lines = npc.lines;
+  const bw = 136, bh = 58, bx = lx - 52, by = ly - 76;
+  ctx.fillStyle = '#f0eaff'; ctx.strokeStyle = '#4A154B'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#f0eaff';
+  ctx.beginPath(); ctx.moveTo(lx+4, ly-14); ctx.lineTo(lx+8, by+bh); ctx.lineTo(lx+14, ly-14); ctx.fill();
+  ctx.font = '11px "Courier New"'; ctx.fillStyle = '#2a0a2a';
+  lines.forEach((l, i) => ctx.fillText(l, bx + 6, by + 16 + i * 14));
+
+  // Badge
+  pixelRect(lx, ly-82, 34, 12, '#4A154B');
+  ctx.font = '8px "Courier New"'; ctx.fillStyle = '#fff';
+  ctx.fillText('SLACK', lx + 4, ly - 73);
+}
+
+// ── Spawn / update char obstacles ─────────────────────────────
+const CHAR_OBSTACLE_SPAWN_POSITIONS = [
+  { x: 300, y: 180 }, { x: 200, y: 240 }, { x: 380, y: 260 },
+  { x: 260, y: 310 }, { x: 340, y: 130 },
+];
+
+function spawnCharObstacle() {
+  if (state.charObstacle && !state.charObstacle.dismissed) return;
+  const pos = CHAR_OBSTACLE_SPAWN_POSITIONS[Math.floor(Math.random() * CHAR_OBSTACLE_SPAWN_POSITIONS.length)];
+  if (state.character === 'julian') {
+    state.charObstacle = {
+      type: 'hater', x: pos.x, y: pos.y, dismissed: false,
+      lines: HATER_LINES[Math.floor(Math.random() * HATER_LINES.length)],
+    };
+    showNotif('🏀 A LeBron Hater is blocking your path!', 2500);
+  } else if (state.character === 'tom') {
+    state.charObstacle = {
+      type: 'veggie', x: pos.x, y: pos.y, dismissed: false,
+      vtype: Math.floor(Math.random() * VEGGIE_TYPES.length),
+    };
+    showNotif('🥦 Someone left veggies in your way!', 2500);
+  } else {
+    state.charObstacle = {
+      type: 'slack', x: pos.x, y: pos.y, dismissed: false,
+      lines: SLACK_LINES[Math.floor(Math.random() * SLACK_LINES.length)],
+    };
+    showNotif('💬 A colleague is spamming you on Slack!', 2500);
+  }
+}
+
+function scheduleCharObstacle() {
+  const delay = 10000 + Math.random() * 10000;
+  setTimeout(() => { if (state.phase === 'playing') spawnCharObstacle(); }, delay);
+}
+
+function handleCharObstacleInteract() {
+  const obs = state.charObstacle;
+  if (!obs || obs.dismissed) return false;
+  const d = dist(state.player.x + 8, state.player.y + 8, obs.x + 14, obs.y + 14);
+  if (d < 65) {
+    obs.dismissed = true;
+    spawnParticles(obs.x + 14, obs.y, obs.type === 'hater' ? '#ff4444' : '#44aa44');
+    state.energy = Math.max(0, state.energy - 12);
+    const msg = obs.type === 'hater' ? '🏀 Told them off! (-12 energy)'
+              : obs.type === 'veggie' ? '🥦 Kicked the veggies! (-12 energy)'
+              : '💬 Put your phone down! (-12 energy)';
+    showNotif(msg, 1500);
+    scheduleCharObstacle();
+    return true;
+  }
+  showNotif('Get closer first!', 1200);
+  return true;
+}
+
+// ── Draw particles ───────────────────────────────────────────
+function drawParticles() {
+  state.particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(Math.round(p.x), Math.round(p.y), 4, 4);
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ── Draw HUD overlays ─────────────────────────────────────────
+function drawDirectionArrow() {
+  const px = state.player.x + 8, py = state.player.y + 8;
+  let tx, ty;
+  if (state.taskPhase === 'goToBooth') {
+    tx = TRANS_BOOTH.x + TRANS_BOOTH.w/2;
+    ty = TRANS_BOOTH.y + TRANS_BOOTH.h/2;
+  } else {
+    tx = PLAYER_DESK.x + PLAYER_DESK.w/2;
+    ty = PLAYER_DESK.y + PLAYER_DESK.h/2;
+  }
+  const angle = Math.atan2(ty - py, tx - px);
+  const d = dist(px, py, tx, ty);
+  if (d < 60) return;
+
+  const ax = px + Math.cos(angle) * 28, ay = py + Math.sin(angle) * 28;
+  ctx.save();
+  ctx.translate(ax, ay);
+  ctx.rotate(angle);
+  ctx.strokeStyle = '#ffcc00';
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.7 + Math.sin(Date.now()/200)*0.3;
+  ctx.beginPath();
+  ctx.moveTo(-8, 0); ctx.lineTo(8, 0);
+  ctx.moveTo(4, -4); ctx.lineTo(8, 0); ctx.lineTo(4, 4);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// ── Update HUD ───────────────────────────────────────────────
+function updateHUD() {
+  const pct = state.energy / 100;
+  const bar = document.getElementById('energy-bar');
+  bar.style.width = (pct * 100) + '%';
+  bar.style.background = pct > 0.5 ? '#00ff88' : pct > 0.25 ? '#ffcc00' : '#ff4444';
+
+  const t = document.getElementById('timer-display');
+  t.textContent = Math.ceil(state.timeLeft);
+  t.style.color = state.timeLeft < 15 ? '#ff4444' : '#ffcc00';
+
+  document.getElementById('score-display').textContent = 'SCORE: ' + state.score;
+  const lvlEl = document.getElementById('level-display');
+  if (state.level === 2) {
+    lvlEl.textContent = '🌡 LVL 2'; lvlEl.style.color = '#ff8844';
+  } else {
+    lvlEl.textContent = 'LVL 1'; lvlEl.style.color = '#aaa';
+  }
+
+  const taskEl = document.getElementById('task-display');
+  if (state.obstacle && !state.obstacle.dismissed) {
+    taskEl.style.color = '#ff4444';
+    taskEl.textContent = '⚠ Handle obstacle!';
+  } else {
+    taskEl.style.color = '#ff88ff';
+    taskEl.textContent = state.taskPhase === 'goToBooth'
+      ? '→ Go to transcription booth'
+      : '← Return to your desk';
+  }
+}
+
+// ── Spawn obstacle ───────────────────────────────────────────
+function spawnObstacle() {
+  if (state.obstacle && !state.obstacle.dismissed) return;
+  const types = ['ceo', 'client', 'sales'];
+  const type = types[Math.floor(Math.random() * types.length)];
+  const spawn = NPC_SPAWN[Math.floor(Math.random() * NPC_SPAWN.length)];
+  state.obstacle = {
+    type,
+    x: spawn.x,
+    y: spawn.y,
+    dismissed: false,
+  };
+
+  const msgs = {
+    ceo:    '👔 CEO needs you immediately!',
+    client: '😤 Client found mistakes! Deal with them!',
+    sales:  '📢 Sales just cut your deadline by 30 seconds!',
+  };
+  showNotif(msgs[type], 3000);
+
+  if (type === 'sales') {
+    state.timeLeft = Math.max(5, state.timeLeft - LEVEL_CONFIG[state.level].salesPenalty);
+    state.flashTimer = 60;
+  }
+}
+
+// ── Handle interaction ───────────────────────────────────────
+function handleInteract() {
+  const p = state.player;
+  const obs = state.obstacle;
+
+  // Dismiss nearby obstacle
+  if (obs && !obs.dismissed) {
+    const d = dist(p.x, p.y, obs.x, obs.y);
+    if (d < 70) {
+      obs.dismissed = true;
+      spawnParticles(obs.x+8, obs.y, '#ffcc00');
+      state.energy = Math.max(0, state.energy - 15);
+      showNotif('✓ Handled! (-15 energy)', 1500);
+
+      if (obs.type === 'client') {
+        state.taskPhase = 'goToDesk';
+        showNotif('😤 Client issue! Return to desk first!', 2500);
+      }
+    } else {
+      showNotif('Get closer to the obstacle first!', 1500);
+    }
+    return;
+  }
+
+  // Character-specific obstacle
+  if (handleCharObstacleInteract()) return;
+
+  // Illegal Pete's burrito
+  const BURRITO = { x: 320, y: 344 };
+  const db = dist(p.x+8, p.y+8, BURRITO.x, BURRITO.y);
+  if (db < 60) {
+    if (state.burritoCooldown > 0) {
+      showNotif(`🌯 Still digesting... (${Math.ceil(state.burritoCooldown)}s)`, 1500);
+    } else {
+      state.energy = Math.min(100, state.energy + 50);
+      state.burritoCooldown = 25;
+      spawnParticles(BURRITO.x, BURRITO.y - 10, '#ffaa00');
+      showNotif("🌯 Illegal Pete's burrito! +50 energy!", 2000);
+    }
+    return;
+  }
+
+  // Water cooler
+  const COOLER = { x: 544, y: 192 };
+  const dc = dist(p.x+8, p.y+8, COOLER.x, COOLER.y);
+  if (dc < 60) {
+    if (state.waterCooldown > 0) {
+      showNotif(`💧 Water cooler recharging... (${Math.ceil(state.waterCooldown)}s)`, 1500);
+    } else {
+      const gain = Math.min(30, 100 - state.energy);
+      state.energy = Math.min(100, state.energy + 30);
+      state.waterCooldown = 12;
+      spawnParticles(COOLER.x, COOLER.y - 10, '#33aaff');
+      showNotif(`💧 Hydrated! +30 energy`, 1800);
+    }
+    return;
+  }
+
+  // Block transcription if char obstacle is active
+  if (charObstacleActive()) {
+    const labels = { hater: '🏀 Deal with the LeBron Hater first!', veggie: '🥦 Move those veggies first!', slack: '💬 Answer your Slack messages first!' };
+    showNotif(labels[state.charObstacle.type] || '⚠ Handle the obstacle first!', 2000);
+    return;
+  }
+
+  // Interact with transcription booth
+  if (state.taskPhase === 'goToBooth') {
+    const d = dist(p.x+8, p.y+8, TRANS_BOOTH.x + TRANS_BOOTH.w/2, TRANS_BOOTH.y + TRANS_BOOTH.h/2);
+    if (d < 60) {
+      completeBooth();
+    }
+  }
+
+  // Interact with player desk
+  if (state.taskPhase === 'goToDesk') {
+    const d = dist(p.x+8, p.y+8, PLAYER_DESK.x + PLAYER_DESK.w/2, PLAYER_DESK.y + PLAYER_DESK.h/2);
+    if (d < 60) {
+      completeDesk();
+    }
+  }
+}
+
+function completeBooth() {
+  spawnParticles(TRANS_BOOTH.x + 40, TRANS_BOOTH.y + 20, '#00ff88');
+  state.taskPhase = 'goToDesk';
+  state.score += 100;
+  state.tasks += 1;
+  state.energy = Math.min(100, state.energy + 10);
+  showNotif('✓ Transcription submitted! +100 pts  +10 energy', 2000);
+}
+
+function completeDesk() {
+  spawnParticles(PLAYER_DESK.x + 40, PLAYER_DESK.y + 20, '#00aaff');
+  state.taskPhase = 'goToBooth';
+  state.score += 50;
+  showNotif('✓ Back at desk! New transcript ready!', 2000);
+  // Schedule next obstacle
+  const cfg = LEVEL_CONFIG[state.level];
+  const delay = cfg.obstacleMin + Math.random() * cfg.obstacleRng;
+  setTimeout(() => {
+    if (state.phase === 'playing') spawnObstacle();
+  }, delay);
+}
+
+// ── Particles ─────────────────────────────────────────────────
+function spawnParticles(x, y, color) {
+  for (let i = 0; i < 12; i++) {
+    state.particles.push({
+      x: x + Math.random()*20 - 10,
+      y: y + Math.random()*20 - 10,
+      vx: (Math.random()-0.5)*3,
+      vy: (Math.random()-0.5)*3 - 2,
+      color,
+      life: 1,
+    });
+  }
+}
+
+// ── Movement & collision ──────────────────────────────────────
+function movePlayer(dt) {
+  const p = state.player;
+  const speed = 120 * dt;
+  let dx = 0, dy = 0;
+
+  if (state.keys['ArrowLeft'])  dx -= 1;
+  if (state.keys['ArrowRight']) dx += 1;
+  if (state.keys['ArrowUp'])    dy -= 1;
+  if (state.keys['ArrowDown'])  dy += 1;
+
+  if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
+
+  const nx = p.x + dx * speed;
+  const ny = p.y + dy * speed;
+  const pw = 16, ph = 24;
+
+  let canX = true, canY = true;
+  for (const w of WALLS) {
+    if (rectOverlap(nx, p.y, pw, ph, w.x, w.y, w.w, w.h)) canX = false;
+    if (rectOverlap(p.x, ny, pw, ph, w.x, w.y, w.w, w.h)) canY = false;
+  }
+
+  if (canX) p.x = nx;
+  if (canY) p.y = ny;
+
+  // Direction
+  if (dx < 0) p.dir = 'left';
+  else if (dx > 0) p.dir = 'right';
+  else if (dy < 0) p.dir = 'up';
+  else if (dy > 0) p.dir = 'down';
+
+  // Animate
+  if (dx !== 0 || dy !== 0) {
+    p.animTimer += dt;
+    if (p.animTimer > 0.15) { p.frame++; p.animTimer = 0; }
+    // Walking drains energy
+    state.energy -= LEVEL_CONFIG[state.level].walkDrain * dt;
+  }
+}
+
+// ── Auto-proximity interactions ──────────────────────────────
+function charObstacleActive() {
+  return state.charObstacle && !state.charObstacle.dismissed;
+}
+
+function checkProximity() {
+  if (charObstacleActive()) return;
+  const p = state.player;
+
+  if (state.taskPhase === 'goToBooth') {
+    const d = dist(p.x+8, p.y+8, TRANS_BOOTH.x+40, TRANS_BOOTH.y+24);
+    if (d < 40) completeBooth();
+  } else if (state.taskPhase === 'goToDesk') {
+    const d = dist(p.x+8, p.y+8, PLAYER_DESK.x+40, PLAYER_DESK.y+24);
+    if (d < 40) completeDesk();
+  }
+}
+
+// ── Game loop ─────────────────────────────────────────────────
+let lastTime = null;
+let obstacleScheduled = false;
+
+function loop(ts) {
+  if (state.phase !== 'playing') return;
+
+  const dt = lastTime === null ? 0 : Math.min((ts - lastTime) / 1000, 0.05);
+  lastTime = ts;
+
+  // Schedule first obstacle
+  if (!obstacleScheduled) {
+    obstacleScheduled = true;
+    setTimeout(() => { if (state.phase === 'playing') spawnObstacle(); }, 5000);
+    scheduleCharObstacle();
+  }
+
+  movePlayer(dt);
+  checkProximity();
+
+  // Particles
+  state.particles = state.particles.filter(p => p.life > 0);
+  state.particles.forEach(p => {
+    p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= 0.04;
+  });
+
+  if (state.flashTimer > 0) state.flashTimer--;
+  if (state.waterCooldown > 0) state.waterCooldown = Math.max(0, state.waterCooldown - dt);
+  if (state.burritoCooldown > 0) state.burritoCooldown = Math.max(0, state.burritoCooldown - dt);
+
+  // Energy drain (idle)
+  state.energy -= LEVEL_CONFIG[state.level].idleDrain * dt;
+  state.energy = Math.max(0, Math.min(100, state.energy));
+
+  // ── Draw ──
+  ctx.clearRect(0, 0, 640, 400);
+
+  // Flash on sales attack
+  if (state.flashTimer > 0 && state.flashTimer % 6 < 3) {
+    ctx.fillStyle = 'rgba(255,0,255,0.15)';
+    ctx.fillRect(0, 0, 640, 400);
+  }
+
+  drawOffice();
+  if (state.level === 2) drawHeatOverlay();
+  drawParticles();
+  if (state.obstacle && !state.obstacle.dismissed) drawNPC(state.obstacle);
+  if (state.charObstacle && !state.charObstacle.dismissed) {
+    if      (state.charObstacle.type === 'hater')  drawHater(state.charObstacle);
+    else if (state.charObstacle.type === 'veggie') drawVeggieBowl(state.charObstacle);
+    else if (state.charObstacle.type === 'slack')  drawSlackMessage(state.charObstacle);
+  }
+
+  // Highlight targets
+  if (state.taskPhase === 'goToBooth') {
+    const pulse = 0.4 + Math.sin(Date.now()/300)*0.3;
+    ctx.strokeStyle = `rgba(0,255,68,${pulse})`;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(392, 56, 96, 64);
+  } else {
+    const pulse = 0.4 + Math.sin(Date.now()/300)*0.3;
+    ctx.strokeStyle = `rgba(0,170,255,${pulse})`;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(136, 248, 96, 64);
+  }
+
+  drawPlayer(state.player.x, state.player.y, state.player.dir, state.player.frame);
+  drawDirectionArrow();
+
+  updateHUD();
+
+  // Check end conditions
+  if (state.energy <= 0) {
+    endGame('You ran out of energy... take a break!', false);
+    return;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// Timer (separate from RAF for accuracy)
+function startTimer() {
+  state.timerInterval = setInterval(() => {
+    if (state.phase !== 'playing') return;
+    state.timeLeft -= 0.1;
+    if (state.timeLeft <= 0) {
+      endGame('Time is up! Shift over!', true);
+    }
+  }, 100);
+}
+
+// ── Boss fight ────────────────────────────────────────────────
+let bossLastTime = null;
+
+function startBossFight() {
+  state.phase = 'boss';
+  state.bossTimer = 15;
+  state.bossChecks = [];
+  state.bossScore = 0;
+  state.bossSpawnTimer = 0;
+  state.bossBriefcaseShake = 0;
+  bossLastTime = null;
+  document.getElementById('notification').style.visibility = 'hidden';
+  showNotif('💰 BONUS ROUND! Catch the Government checks!', 3000);
+  requestAnimationFrame(bossLoop);
+}
+
+function spawnCheck() {
+  const bx = 540, by = 180;
+  const angle = Math.PI + (Math.random() * 0.8 - 0.4); // leftward with spread
+  const speed = 120 + Math.random() * 140;
+  state.bossChecks.push({
+    x: bx, y: by,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed - 60,
+    rot: Math.random() * Math.PI * 2,
+    rotV: (Math.random() - 0.5) * 6,
+    caught: false,
+    age: 0,
+  });
+  state.bossBriefcaseShake = 8;
+}
+
+function drawCheck(ck) {
+  ctx.save();
+  ctx.translate(Math.round(ck.x + 12), Math.round(ck.y + 8));
+  ctx.rotate(ck.rot);
+  // Paper
+  ctx.fillStyle = '#f0f0e0';
+  ctx.fillRect(-12, -8, 24, 16);
+  ctx.strokeStyle = '#aaa';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-12, -8, 24, 16);
+  // Lines of text
+  ctx.fillStyle = '#888';
+  ctx.fillRect(-8, -4, 14, 2);
+  ctx.fillRect(-8, 0, 10, 2);
+  // $ amount
+  ctx.fillStyle = '#006600';
+  ctx.font = 'bold 7px "Courier New"';
+  ctx.fillText('$$$', -6, 7);
+  // US GOVT stamp
+  ctx.fillStyle = '#cc000033';
+  ctx.font = '5px "Courier New"';
+  ctx.fillText('US GOVT', -9, -5);
+  ctx.restore();
+}
+
+function drawGovClient(shake) {
+  const x = 530 + (shake > 0 ? Math.sin(shake * 1.8) * 3 : 0);
+  const y = 130;
+
+  // Shadow
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(x+10, y+80, 14, 5, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Suit (dark navy)
+  pixelRect(x+1, y+22, 18, 28, '#1a2a4a');
+  // Shirt/tie
+  pixelRect(x+7, y+22, 6, 14, '#f0f0f0');
+  pixelRect(x+9, y+24, 2, 12, '#cc0000');
+  // Legs
+  pixelRect(x+2, y+48, 6, 20, '#1a2a4a');
+  pixelRect(x+12, y+48, 6, 20, '#1a2a4a');
+  // Shoes
+  pixelRect(x+1, y+66, 8, 6, '#111');
+  pixelRect(x+11, y+66, 8, 6, '#111');
+  // Throwing arm (raised)
+  pixelRect(x+18, y+14, 6, 10, '#1a2a4a');
+  pixelRect(x+22, y+10, 5, 8, '#d4a870');
+  // Other arm (briefcase)
+  pixelRect(x-4, y+26, 6, 10, '#1a2a4a');
+  pixelRect(x-8, y+34, 14, 10, '#8b6914');
+  pixelRect(x-6, y+32, 10, 4, '#a07820');
+  pixelRect(x-2, y+30, 4, 6, '#a07820');
+  // Head
+  pixelRect(x+3, y+4, 14, 14, '#d4a870');
+  // Hair (grey, slicked)
+  pixelRect(x+3, y+2, 14, 6, '#999999');
+  pixelRect(x+3, y+2, 14, 2, '#bbbbbb');
+  // Eyes (stern)
+  pixelRect(x+6, y+9, 2, 2, '#222');
+  pixelRect(x+12, y+9, 2, 2, '#222');
+  // Frown
+  pixelRect(x+7, y+14, 6, 1, '#aa7755');
+  pixelRect(x+6, y+15, 2, 1, '#aa7755');
+  pixelRect(x+12, y+15, 2, 1, '#aa7755');
+  // Label
+  ctx.fillStyle = '#ffdd44';
+  ctx.font = 'bold 8px "Courier New"';
+  ctx.fillText('GOV. CLIENT', x - 6, y - 4);
+}
+
+function drawBossHUD() {
+  // Banner
+  const pulse = 0.85 + Math.sin(Date.now() / 150) * 0.15;
+  ctx.globalAlpha = pulse;
+  ctx.fillStyle = '#cc0000';
+  ctx.fillRect(0, 0, 640, 28);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#ffff00';
+  ctx.font = 'bold 14px "Courier New"';
+  ctx.textAlign = 'center';
+  ctx.fillText('⚡ BONUS ROUND — CATCH THE CHECKS! ⚡', 320, 18);
+  ctx.textAlign = 'left';
+
+  // Boss timer bar
+  const pct = state.bossTimer / 15;
+  ctx.fillStyle = '#222';
+  ctx.fillRect(16, 34, 200, 12);
+  ctx.fillStyle = pct > 0.5 ? '#00ff88' : pct > 0.25 ? '#ffcc00' : '#ff4444';
+  ctx.fillRect(16, 34, Math.round(200 * pct), 12);
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(16, 34, 200, 12);
+  ctx.fillStyle = '#fff';
+  ctx.font = '9px "Courier New"';
+  ctx.fillText(`${Math.ceil(state.bossTimer)}s`, 222, 44);
+
+  // Caught counter
+  ctx.fillStyle = '#ffaa00';
+  ctx.font = 'bold 13px "Courier New"';
+  ctx.textAlign = 'right';
+  ctx.fillText(`CHECKS CAUGHT: ${state.bossScore / 75}  (+${state.bossScore} pts)`, 624, 44);
+  ctx.textAlign = 'left';
+}
+
+function bossLoop(ts) {
+  if (state.phase !== 'boss') return;
+
+  const dt = bossLastTime === null ? 0 : Math.min((ts - bossLastTime) / 1000, 0.05);
+  bossLastTime = ts;
+
+  // Tick boss timer
+  state.bossTimer -= dt;
+  if (state.bossTimer <= 0) {
+    showBossResult();
+    return;
+  }
+
+  // Spawn checks
+  state.bossSpawnTimer -= dt;
+  if (state.bossSpawnTimer <= 0) {
+    spawnCheck();
+    state.bossSpawnTimer = 0.6 + Math.random() * 0.5;
+  }
+  if (state.bossBriefcaseShake > 0) state.bossBriefcaseShake -= dt * 20;
+
+  // Move player
+  movePlayer(dt);
+
+  // Keep player away from boss — exclusion zone
+  const BOSS_CX = 548, BOSS_CY = 192, BOSS_EXCL = 90;
+  const bpdx = state.player.x + 8 - BOSS_CX;
+  const bpdy = state.player.y + 12 - BOSS_CY;
+  const bpd  = Math.sqrt(bpdx * bpdx + bpdy * bpdy);
+  if (bpd < BOSS_EXCL) {
+    const ang = Math.atan2(bpdy, bpdx);
+    state.player.x = BOSS_CX + Math.cos(ang) * BOSS_EXCL - 8;
+    state.player.y = BOSS_CY + Math.sin(ang) * BOSS_EXCL - 12;
+  }
+
+  // Update checks
+  state.bossChecks.forEach(ck => {
+    if (ck.caught) return;
+    ck.x += ck.vx * dt;
+    ck.y += ck.vy * dt;
+    ck.vy += 180 * dt; // gravity
+    ck.rot += ck.rotV * dt;
+    ck.age += dt;
+    // Bounce off floor
+    if (ck.y > 340) { ck.y = 340; ck.vy *= -0.45; ck.rotV *= 0.5; }
+    // Catch collision
+    if (dist(state.player.x + 8, state.player.y + 8, ck.x + 12, ck.y + 8) < 28) {
+      ck.caught = true;
+      state.bossScore += 75;
+      spawnParticles(ck.x, ck.y, '#ffdd00');
+    }
+  });
+  // Cull old checks
+  state.bossChecks = state.bossChecks.filter(ck => ck.age < 6 && ck.x > -40);
+
+  // Draw
+  ctx.clearRect(0, 0, 640, 400);
+  drawOffice();
+  if (state.level === 2) drawHeatOverlay();
+  drawParticles();
+
+  // Draw uncaught checks under boss, caught ones already removed
+  state.bossChecks.forEach(ck => { if (!ck.caught) drawCheck(ck); });
+
+  drawGovClient(state.bossBriefcaseShake);
+  drawPlayer(state.player.x, state.player.y, state.player.dir, state.player.frame);
+  drawBossHUD();
+
+  requestAnimationFrame(bossLoop);
+}
+
+function showBossResult() {
+  state.phase = 'done';
+  const caught = state.bossScore / 75;
+  const total  = state.score + state.bossScore;
+
+  if (state.level === 1) {
+    // Show level-complete / transition to Level 2
+    document.getElementById('lc-score').textContent = 'SHIFT SCORE: ' + state.score;
+    document.getElementById('lc-bonus').textContent = `💰 CHECKS CAUGHT: ${caught}  (+${state.bossScore} pts)`;
+    document.getElementById('lc-total').textContent = '★ LEVEL 1 TOTAL: ' + total;
+    document.getElementById('level-complete-screen').style.display = 'flex';
+    // carry score into level 2
+    state._carryScore = total;
+  } else {
+    // Level 2 final win
+    document.getElementById('win-score').textContent  = 'LEVEL 2 SCORE: ' + state.score;
+    document.getElementById('win-tasks').textContent  = 'TRANSCRIPTIONS: ' + state.tasks;
+    document.getElementById('win-bonus').textContent  = `💰 CHECKS CAUGHT: ${caught}  (+${state.bossScore} bonus pts)`;
+    document.getElementById('win-total').textContent  = '★ GRAND TOTAL: ' + (total + (state._carryScore || 0));
+    document.getElementById('win-screen').style.display = 'flex';
+  }
+}
+
+function startLevel(level) {
+  const carry = state._carryScore || 0;
+  const character = state.character;
+  resetState(level);
+  state.character = character;
+  state.score = carry;
+  obstacleScheduled = false;
+  lastTime = null;
+  document.getElementById('title-screen').style.display          = 'none';
+  document.getElementById('game-over-screen').style.display      = 'none';
+  document.getElementById('win-screen').style.display            = 'none';
+  document.getElementById('level-complete-screen').style.display = 'none';
+  document.getElementById('canvas-wrap').style.display           = 'block';
+  document.getElementById('notification').style.visibility       = 'hidden';
+  if (level === 2) showNotif('🌡 LEVEL 2 — AC OUT OF ORDER! Energy drains faster!', 3500);
+  startTimer();
+  requestAnimationFrame(loop);
+}
+
+// ── End game ──────────────────────────────────────────────────
+function endGame(reason, win) {
+  state.phase = 'done';
+  if (state.timerInterval) clearInterval(state.timerInterval);
+
+  if (win) {
+    startBossFight();
+  } else {
+    document.getElementById('game-over-reason').textContent = reason;
+    document.getElementById('final-score').textContent = 'SCORE: ' + state.score;
+    document.getElementById('final-tasks').textContent = 'TRANSCRIPTIONS: ' + state.tasks;
+    document.getElementById('game-over-screen').style.display = 'flex';
+  }
+}
+
+// ── Start game ────────────────────────────────────────────────
+function startGame() {
+  resetState(1);
+  obstacleScheduled = false;
+  lastTime = null;
+  document.getElementById('title-screen').style.display          = 'none';
+  document.getElementById('char-select-screen').style.display    = 'none';
+  document.getElementById('game-over-screen').style.display      = 'none';
+  document.getElementById('win-screen').style.display            = 'none';
+  document.getElementById('level-complete-screen').style.display = 'none';
+  document.getElementById('canvas-wrap').style.display           = 'block';
+  document.getElementById('notification').style.visibility       = 'hidden';
+  // reset char confirm button for next visit
+  selectedChar = null;
+  const btn = document.getElementById('char-confirm-btn');
+  btn.style.opacity = '0.3'; btn.style.pointerEvents = 'none'; btn.disabled = true;
+  document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
+  startTimer();
+  requestAnimationFrame(loop);
+}
+
+// ── Input ─────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  state.keys[e.key] = true;
+  if (e.key === ' ') {
+    e.preventDefault();
+    if (state.phase === 'playing') handleInteract();
+  }
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { state.keys[e.key] = false; });
+
+document.getElementById('card-julian').addEventListener('click', () => selectChar('julian'));
+document.getElementById('card-tom').addEventListener('click', () => selectChar('tom'));
+document.getElementById('card-tyler').addEventListener('click', () => selectChar('tyler'));
+document.getElementById('start-btn').addEventListener('click', showCharSelect);
+document.getElementById('char-confirm-btn').addEventListener('click', startGame);
+document.getElementById('restart-btn').addEventListener('click', showCharSelect);
+document.getElementById('restart-btn2').addEventListener('click', showCharSelect);
+document.getElementById('next-level-btn').addEventListener('click', () => startLevel(2));
+document.getElementById('replay-l1-btn').addEventListener('click', showCharSelect);
+
+// Initial empty canvas draw
+resetState();
+</script>
+</body>
+</html>
