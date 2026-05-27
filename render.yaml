@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: valid8-transcriber-game
+    env: static
+    staticPublishPath: .
+    buildCommand: ""
+    pullRequestPreviewsEnabled: false
