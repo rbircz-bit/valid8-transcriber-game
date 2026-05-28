@@ -280,7 +280,7 @@ async function submitScore(name, score, character, level) {
 
 async function fetchLeaderboard() {
   try {
-    const res = await fetch(`${FB}/scores.json?orderBy="score"&limitToLast=10`);
+    const res = await fetch(`${FB}/scores.json`);
     if (!res.ok) return [];
     const data = await res.json();
     if (!data) return [];
