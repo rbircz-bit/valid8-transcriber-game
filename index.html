@@ -101,6 +101,24 @@
   }
   #controls-hint { font-size: 10px; color: #444; margin-top: 6px; }
   .stat { color: #ffcc00; font-size: 22px; margin: 6px 0; }
+  .score-submit { margin: 14px 0 6px; text-align: center; }
+  .score-submit label { font-size: 12px; color: #888; display: block; margin-bottom: 8px; }
+  .name-input {
+    background: #111; border: 2px solid #00ff88; color: #00ff88;
+    font-family: 'Courier New', monospace; font-size: 15px;
+    padding: 8px 12px; width: 180px; text-transform: uppercase;
+    outline: none; margin-right: 8px;
+  }
+  .name-input::placeholder { color: #334; }
+  .submit-status { font-size: 11px; color: #888; margin-top: 8px; min-height: 16px; }
+  #leaderboard-wrap { width: 520px; margin-top: 20px; }
+  #leaderboard-wrap h3 { color: #ffcc00; font-size: 13px; letter-spacing: 2px; margin-bottom: 10px; text-align: center; }
+  #lb-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  #lb-table th { color: #555; padding: 4px 10px; border-bottom: 1px solid #1a1a1a; text-align: left; font-weight: normal; letter-spacing: 1px; }
+  #lb-table td { padding: 6px 10px; color: #aaa; border-bottom: 1px solid #111; }
+  #lb-table tr:nth-child(2) td { color: #ffdd44; }
+  #lb-table tr:nth-child(3) td { color: #cccccc; }
+  #lb-table tr:nth-child(4) td { color: #cc7744; }
 </style>
 </head>
 <body>
@@ -121,6 +139,10 @@
     If energy hits zero — you crash out!
   </div>
   <button class="btn" id="start-btn">▶  SELECT CHARACTER</button>
+  <div id="leaderboard-wrap">
+    <h3>🏆 LEADERBOARD</h3>
+    <table id="lb-table"><tr><td style="color:#444;text-align:center;padding:12px">Loading...</td></tr></table>
+  </div>
 </div>
 
 <div id="char-select-screen" style="display:none;">
@@ -154,7 +176,12 @@
   <div class="subtitle" id="game-over-reason">You ran out of energy...</div>
   <div class="stat" id="final-score"></div>
   <div class="stat" id="final-tasks"></div>
-  <br>
+  <div class="score-submit">
+    <label>Submit your score to the leaderboard</label>
+    <input class="name-input" id="go-name" type="text" maxlength="12" placeholder="YOUR NAME" />
+    <button class="btn" id="go-submit-btn" style="font-size:13px;padding:8px 16px">SUBMIT</button>
+    <div class="submit-status" id="go-status"></div>
+  </div>
   <button class="btn" id="restart-btn">▶  TRY AGAIN</button>
 </div>
 
@@ -185,7 +212,12 @@
   <div class="stat" id="win-tasks"></div>
   <div class="stat" style="color:#ffaa00" id="win-bonus"></div>
   <div class="stat" style="color:#00ff88;font-size:26px" id="win-total"></div>
-  <br>
+  <div class="score-submit">
+    <label>Submit your score to the leaderboard</label>
+    <input class="name-input" id="win-name" type="text" maxlength="12" placeholder="YOUR NAME" />
+    <button class="btn" id="win-submit-btn" style="font-size:13px;padding:8px 16px">SUBMIT</button>
+    <div class="submit-status" id="win-status"></div>
+  </div>
   <button class="btn" id="restart-btn2">▶  PLAY AGAIN</button>
 </div>
 
@@ -227,6 +259,73 @@ const C = {
   window:   '#aaddff',
   windowFr: '#888',
 };
+
+// ── Firebase leaderboard ─────────────────────────────────────
+const FB = 'https://valid8-transcription-game-default-rtdb.firebaseio.com';
+let pendingSubmit = null; // { score, character, level }
+
+async function submitScore(name, score, character, level) {
+  try {
+    const res = await fetch(`${FB}/scores.json`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name.toUpperCase().trim().slice(0, 12),
+        score, character, level, ts: Date.now()
+      })
+    });
+    return res.ok;
+  } catch(e) { return false; }
+}
+
+async function fetchLeaderboard() {
+  try {
+    const res = await fetch(`${FB}/scores.json?orderBy="score"&limitToLast=10`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data) return [];
+    return Object.values(data).sort((a, b) => b.score - a.score).slice(0, 10);
+  } catch(e) { return []; }
+}
+
+function renderLeaderboard(scores) {
+  const t = document.getElementById('lb-table');
+  if (!t) return;
+  const medals = ['🥇','🥈','🥉'];
+  const icons  = { julian:'🏀', tom:'🥦', tyler:'💬' };
+  t.innerHTML = '<tr><th>#</th><th>NAME</th><th>SCORE</th><th>CHAR</th><th>LVL</th></tr>';
+  if (!scores.length) {
+    t.innerHTML += '<tr><td colspan="5" style="text-align:center;color:#444;padding:14px">No scores yet — be the first!</td></tr>';
+    return;
+  }
+  scores.forEach((s, i) =>
+    t.innerHTML += `<tr><td>${medals[i]||i+1}</td><td>${s.name}</td><td>${s.score}</td><td>${icons[s.character]||'⭐'} ${s.character}</td><td>${s.level}</td></tr>`
+  );
+}
+
+async function loadTitleLeaderboard() {
+  const scores = await fetchLeaderboard();
+  renderLeaderboard(scores);
+}
+
+function wireSubmitBtn(btnId, inputId, statusId) {
+  document.getElementById(btnId).addEventListener('click', async () => {
+    const name = document.getElementById(inputId).value.trim();
+    if (!name) { document.getElementById(statusId).textContent = 'Please enter a name!'; return; }
+    if (!pendingSubmit) return;
+    document.getElementById(statusId).textContent = 'Submitting...';
+    document.getElementById(btnId).disabled = true;
+    const ok = await submitScore(name, pendingSubmit.score, pendingSubmit.character, pendingSubmit.level);
+    if (ok) {
+      document.getElementById(statusId).textContent = '✓ Score submitted!';
+      document.getElementById(inputId).value = '';
+      loadTitleLeaderboard();
+    } else {
+      document.getElementById(statusId).textContent = '✗ Submission failed. Try again.';
+      document.getElementById(btnId).disabled = false;
+    }
+  });
+}
 
 // ── Character select ─────────────────────────────────────────
 const CHARS = {
@@ -1529,6 +1628,7 @@ function showBossResult() {
   state.phase = 'done';
   const caught = state.bossScore / 75;
   const total  = state.score + state.bossScore;
+  pendingSubmit = { score: total, character: state.character, level: state.level };
 
   if (state.level === 1) {
     // Show level-complete / transition to Level 2
@@ -1540,6 +1640,8 @@ function showBossResult() {
     state._carryScore = total;
   } else {
     // Level 2 final win
+    document.getElementById('win-status').textContent = '';
+    document.getElementById('win-submit-btn').disabled = false;
     document.getElementById('win-score').textContent  = 'LEVEL 2 SCORE: ' + state.score;
     document.getElementById('win-tasks').textContent  = 'TRANSCRIPTIONS: ' + state.tasks;
     document.getElementById('win-bonus').textContent  = `💰 CHECKS CAUGHT: ${caught}  (+${state.bossScore} bonus pts)`;
@@ -1575,9 +1677,12 @@ function endGame(reason, win) {
   if (win) {
     startBossFight();
   } else {
+    pendingSubmit = { score: state.score, character: state.character, level: state.level };
     document.getElementById('game-over-reason').textContent = reason;
     document.getElementById('final-score').textContent = 'SCORE: ' + state.score;
     document.getElementById('final-tasks').textContent = 'TRANSCRIPTIONS: ' + state.tasks;
+    document.getElementById('go-status').textContent = '';
+    document.getElementById('go-submit-btn').disabled = false;
     document.getElementById('game-over-screen').style.display = 'flex';
   }
 }
@@ -1613,6 +1718,10 @@ document.addEventListener('keydown', e => {
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
 });
 document.addEventListener('keyup', e => { state.keys[e.key] = false; });
+
+wireSubmitBtn('go-submit-btn',  'go-name',  'go-status');
+wireSubmitBtn('win-submit-btn', 'win-name', 'win-status');
+loadTitleLeaderboard();
 
 document.getElementById('card-julian').addEventListener('click', () => selectChar('julian'));
 document.getElementById('card-tom').addEventListener('click', () => selectChar('tom'));
