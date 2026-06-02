@@ -1384,21 +1384,33 @@ function loop(ts) {
   // Level 3: update bat
   if (state.level === 3 && state.bat) {
     const b = state.bat;
+    const BAT_SPEED = 175;
+
     b.x += b.vx * dt; b.y += b.vy * dt;
+
+    // Bounce off walls
     if (b.x < 30  || b.x > 610) { b.vx = -b.vx; b.x = Math.max(30, Math.min(610, b.x)); }
     if (b.y < 50  || b.y > 350) { b.vy = -b.vy; b.y = Math.max(50, Math.min(350, b.y)); }
-    // Home in on player periodically
+
+    // Periodically steer toward player with a random angle spread
     b.homeTimer -= dt;
     if (b.homeTimer <= 0) {
       const ang = Math.atan2(state.player.y + 12 - b.y, state.player.x + 8 - b.x);
-      const spd = Math.sqrt(b.vx**2 + b.vy**2);
-      b.vx = b.vx * 0.55 + Math.cos(ang) * spd * 0.45;
-      b.vy = b.vy * 0.55 + Math.sin(ang) * spd * 0.45;
-      b.homeTimer = 1.5 + Math.random() * 2;
+      const spread = (Math.random() - 0.5) * 1.4; // ±80° random wobble
+      const targetAng = ang + spread;
+      b.vx = b.vx * 0.5 + Math.cos(targetAng) * BAT_SPEED * 0.5;
+      b.vy = b.vy * 0.5 + Math.sin(targetAng) * BAT_SPEED * 0.5;
+      b.homeTimer = 1.2 + Math.random() * 1.8;
     }
+
+    // Normalize to constant speed so it never slows down
+    const spd = Math.sqrt(b.vx**2 + b.vy**2);
+    if (spd > 0) { b.vx = (b.vx / spd) * BAT_SPEED; b.vy = (b.vy / spd) * BAT_SPEED; }
+
     // Animate wings
     b.animTimer += dt;
-    if (b.animTimer > 0.18) { b.frame++; b.animTimer = 0; }
+    if (b.animTimer > 0.15) { b.frame++; b.animTimer = 0; }
+
     // Hit detection
     if (b.hitCooldown > 0) b.hitCooldown -= dt;
     const bd = dist(state.player.x + 8, state.player.y + 12, b.x, b.y);
