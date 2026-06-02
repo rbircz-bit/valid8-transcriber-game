@@ -186,23 +186,17 @@
 </div>
 
 <div id="level-complete-screen" style="display:none;">
-  <h1 style="color:#ffcc00;text-shadow:0 0 10px #ffcc00">LEVEL 1 COMPLETE!</h1>
-  <div class="subtitle">You survived the shift — but the AC just broke...</div>
+  <h1 id="lc-title" style="color:#ffcc00;text-shadow:0 0 10px #ffcc00">LEVEL COMPLETE!</h1>
+  <div class="subtitle" id="lc-subtitle"></div>
   <br>
   <div class="stat" id="lc-score"></div>
   <div class="stat" style="color:#ffaa00" id="lc-bonus"></div>
   <div class="stat" style="color:#00ff88;font-size:22px" id="lc-total"></div>
   <br>
-  <div style="border:1px solid #ff4400;padding:14px 24px;margin-bottom:24px;max-width:360px;text-align:center">
-    <div style="color:#ff6600;font-size:13px;margin-bottom:6px">🌡 LEVEL 2: AC OUT OF ORDER</div>
-    <div style="color:#aaa;font-size:11px;line-height:1.8">
-      It's 95°F in the office.<br>
-      Energy drains 25% faster &nbsp;|&nbsp; Obstacles hit harder
-    </div>
-  </div>
-  <button class="btn" style="border-color:#ff6600;color:#ff6600;box-shadow:0 0 14px #ff440044;font-size:15px" id="next-level-btn">🌡  FACE THE HEAT  →  LEVEL 2</button>
+  <div id="lc-next-info" style="border:1px solid #444;padding:14px 24px;margin-bottom:24px;max-width:360px;text-align:center"></div>
+  <button class="btn" id="next-level-btn" style="font-size:15px">NEXT LEVEL</button>
   <br><br>
-  <button class="btn" style="border-color:#888;color:#aaa;font-size:12px" id="replay-l1-btn">↺  REPLAY LEVEL 1</button>
+  <button class="btn" style="border-color:#888;color:#aaa;font-size:12px" id="lc-replay-btn">↺  REPLAY</button>
 </div>
 
 <div id="win-screen" style="display:none;">
@@ -378,7 +372,7 @@ function selectChar(key) {
 }
 
 function showCharSelect() {
-  ['title-screen','game-over-screen','win-screen','level-complete-screen','canvas-wrap']
+  ['title-screen','game-over-screen','win-screen','level-complete-screen','canvas-wrap','char-select-screen']
     .forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('char-select-screen').style.display = 'flex';
   setTimeout(() => {
@@ -392,6 +386,7 @@ function showCharSelect() {
 const LEVEL_CONFIG = {
   1: { walkDrain: 0.8,  idleDrain: 0.15, obstacleMin: 8000, obstacleRng: 8000, salesPenalty: 12, theme: 'normal' },
   2: { walkDrain: 1.0,  idleDrain: 0.19, obstacleMin: 6400, obstacleRng: 6400, salesPenalty: 15, theme: 'hot'    },
+  3: { walkDrain: 0.5,  idleDrain: 0.05, obstacleMin: 99999,obstacleRng: 0,    salesPenalty: 0,  theme: 'normal' },
 };
 
 // ── Game State ───────────────────────────────────────────────
@@ -422,6 +417,7 @@ function resetState(level = 1) {
     character: selectedChar || 'julian',
     charObstacle: null,
     charObstacleTimer: 0,
+    bat: level === 3 ? { x: 120, y: 100, vx: 110, vy: 90, frame: 0, animTimer: 0, hitCooldown: 0, homeTimer: 2 } : null,
     keys: {},
     player: { x: 240, y: 330, dir: 'down', frame: 0, animTimer: 0 },
     npc: null,
@@ -1101,11 +1097,9 @@ function updateHUD() {
 
   document.getElementById('score-display').textContent = 'SCORE: ' + state.score;
   const lvlEl = document.getElementById('level-display');
-  if (state.level === 2) {
-    lvlEl.textContent = '🌡 LVL 2'; lvlEl.style.color = '#ff8844';
-  } else {
-    lvlEl.textContent = 'LVL 1'; lvlEl.style.color = '#aaa';
-  }
+  if (state.level === 2)      { lvlEl.textContent = '🌡 LVL 2'; lvlEl.style.color = '#ff8844'; }
+  else if (state.level === 3) { lvlEl.textContent = '🦇 LVL 3'; lvlEl.style.color = '#aa44ff'; }
+  else                        { lvlEl.textContent = 'LVL 1';    lvlEl.style.color = '#aaa'; }
 
   const taskEl = document.getElementById('task-display');
   if (state.obstacle && !state.obstacle.dismissed) {
@@ -1249,6 +1243,52 @@ function completeDesk() {
   }, delay);
 }
 
+// ── Draw bat ──────────────────────────────────────────────────
+function drawBat(bat) {
+  if (!bat) return;
+  const lx = Math.round(bat.x), ly = Math.round(bat.y);
+  const wingsUp = bat.frame % 2 === 0;
+  const hit = bat.hitCooldown > 0;
+
+  ctx.shadowColor = hit ? '#ff4444' : '#aa44ff';
+  ctx.shadowBlur  = hit ? 20 : 10;
+
+  // Wings
+  const wyOff = wingsUp ? -7 : 7;
+  ctx.fillStyle = '#221133';
+  ctx.beginPath(); ctx.ellipse(lx - 13, ly + wyOff, 12, 5, wingsUp ? -0.3 : 0.3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(lx + 13, ly + wyOff, 12, 5, wingsUp ? 0.3 : -0.3, 0, Math.PI*2); ctx.fill();
+  // Wing membrane detail
+  ctx.fillStyle = '#332255';
+  ctx.beginPath(); ctx.ellipse(lx - 9, ly + wyOff*0.6, 6, 3, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(lx + 9, ly + wyOff*0.6, 6, 3, 0, 0, Math.PI*2); ctx.fill();
+
+  // Body
+  ctx.fillStyle = '#442266';
+  ctx.beginPath(); ctx.ellipse(lx, ly + 1, 6, 8, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#221133';
+  ctx.beginPath(); ctx.ellipse(lx, ly, 5, 7, 0, 0, Math.PI*2); ctx.fill();
+
+  // Ears
+  ctx.fillStyle = '#332255';
+  ctx.beginPath(); ctx.moveTo(lx-5, ly-7); ctx.lineTo(lx-2, ly-13); ctx.lineTo(lx+0, ly-7); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(lx+0, ly-7); ctx.lineTo(lx+2, ly-13); ctx.lineTo(lx+5, ly-7); ctx.closePath(); ctx.fill();
+
+  // Eyes
+  pixelRect(lx-4, ly-3, 3, 3, hit ? '#ff8800' : '#ff2200');
+  pixelRect(lx+1,  ly-3, 3, 3, hit ? '#ff8800' : '#ff2200');
+
+  ctx.shadowBlur = 0;
+
+  // Hit cooldown warning ring
+  if (bat.hitCooldown > 0) {
+    const pct = bat.hitCooldown / 2.5;
+    ctx.strokeStyle = `rgba(255,100,0,${pct * 0.6})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(lx, ly, 20 + (1-pct)*10, 0, Math.PI*2); ctx.stroke();
+  }
+}
+
 // ── Particles ─────────────────────────────────────────────────
 function spawnParticles(x, y, color) {
   for (let i = 0; i < 12; i++) {
@@ -1332,11 +1372,42 @@ function loop(ts) {
   const dt = lastTime === null ? 0 : Math.min((ts - lastTime) / 1000, 0.05);
   lastTime = ts;
 
-  // Schedule first obstacle
+  // Schedule first obstacle (not in L3 — bat is the only hazard)
   if (!obstacleScheduled) {
     obstacleScheduled = true;
-    setTimeout(() => { if (state.phase === 'playing') spawnObstacle(); }, 5000);
-    scheduleCharObstacle();
+    if (state.level < 3) {
+      setTimeout(() => { if (state.phase === 'playing') spawnObstacle(); }, 5000);
+      scheduleCharObstacle();
+    }
+  }
+
+  // Level 3: update bat
+  if (state.level === 3 && state.bat) {
+    const b = state.bat;
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    if (b.x < 30  || b.x > 610) { b.vx = -b.vx; b.x = Math.max(30, Math.min(610, b.x)); }
+    if (b.y < 50  || b.y > 350) { b.vy = -b.vy; b.y = Math.max(50, Math.min(350, b.y)); }
+    // Home in on player periodically
+    b.homeTimer -= dt;
+    if (b.homeTimer <= 0) {
+      const ang = Math.atan2(state.player.y + 12 - b.y, state.player.x + 8 - b.x);
+      const spd = Math.sqrt(b.vx**2 + b.vy**2);
+      b.vx = b.vx * 0.55 + Math.cos(ang) * spd * 0.45;
+      b.vy = b.vy * 0.55 + Math.sin(ang) * spd * 0.45;
+      b.homeTimer = 1.5 + Math.random() * 2;
+    }
+    // Animate wings
+    b.animTimer += dt;
+    if (b.animTimer > 0.18) { b.frame++; b.animTimer = 0; }
+    // Hit detection
+    if (b.hitCooldown > 0) b.hitCooldown -= dt;
+    const bd = dist(state.player.x + 8, state.player.y + 12, b.x, b.y);
+    if (bd < 22 && b.hitCooldown <= 0) {
+      state.energy = Math.max(0, state.energy - 22);
+      b.hitCooldown = 2.5;
+      state.flashTimer = 30;
+      showNotif('🦇 The bat got you! (−22 energy)', 1800);
+    }
   }
 
   movePlayer(dt);
@@ -1388,6 +1459,7 @@ function loop(ts) {
     ctx.strokeRect(136, 248, 96, 64);
   }
 
+  if (state.level === 3) drawBat(state.bat);
   drawPlayer(state.player.x, state.player.y, state.player.dir, state.player.frame);
   drawDirectionArrow();
 
@@ -1626,26 +1698,53 @@ function bossLoop(ts) {
 
 function showBossResult() {
   state.phase = 'done';
-  const caught = state.bossScore / 75;
+  const caught = Math.round(state.bossScore / 75);
   const total  = state.score + state.bossScore;
   pendingSubmit = { score: total, character: state.character, level: state.level };
 
-  if (state.level === 1) {
-    // Show level-complete / transition to Level 2
-    document.getElementById('lc-score').textContent = 'SHIFT SCORE: ' + state.score;
+  if (state.level < 3) {
+    // Level 1 or 2 → show level-complete transition screen
+    const nextLv = state.level + 1;
+    const NEXT = {
+      2: {
+        border: '#ff6600', color: '#ff6600', glow: '#ff440044',
+        btnLabel: '🌡  FACE THE HEAT  →  LEVEL 2',
+        infoHtml: `<div style="color:#ff6600;font-size:14px;margin-bottom:8px">🌡 LEVEL 2: AC OUT OF ORDER</div>
+                   <div style="color:#aaa;font-size:12px;line-height:1.8">It's 95°F in the office.<br>Energy drains 25% faster &nbsp;|&nbsp; Obstacles hit harder</div>`,
+      },
+      3: {
+        border: '#aa44ff', color: '#aa44ff', glow: '#aa44ff44',
+        btnLabel: '🦇  BAT ATTACK  →  LEVEL 3',
+        infoHtml: `<div style="color:#aa44ff;font-size:14px;margin-bottom:8px">🦇 LEVEL 3: BAT ATTACK</div>
+                   <div style="color:#aaa;font-size:12px;line-height:1.8">Temperature back to normal.<br>But a bat is loose in the office — and it wants you.</div>`,
+      },
+    }[nextLv];
+
+    document.getElementById('lc-title').textContent    = `LEVEL ${state.level} COMPLETE!`;
+    document.getElementById('lc-subtitle').textContent = state.level === 1
+      ? 'You survived the shift — but the AC just broke...'
+      : 'You beat the heat — but something is lurking...';
+    document.getElementById('lc-score').textContent = `SHIFT SCORE: ${state.score}`;
     document.getElementById('lc-bonus').textContent = `💰 CHECKS CAUGHT: ${caught}  (+${state.bossScore} pts)`;
-    document.getElementById('lc-total').textContent = '★ LEVEL 1 TOTAL: ' + total;
-    document.getElementById('level-complete-screen').style.display = 'flex';
-    // carry score into level 2
+    document.getElementById('lc-total').textContent = `★ LEVEL ${state.level} TOTAL: ${total}`;
+    document.getElementById('lc-next-info').innerHTML  = NEXT.infoHtml;
+    document.getElementById('lc-next-info').style.borderColor = NEXT.border;
+    const nb = document.getElementById('next-level-btn');
+    nb.textContent = NEXT.btnLabel;
+    nb.style.cssText = `border-color:${NEXT.border};color:${NEXT.color};box-shadow:0 0 14px ${NEXT.glow};font-size:15px`;
+    document.getElementById('lc-replay-btn').textContent = `↺  REPLAY LEVEL ${state.level}`;
     state._carryScore = total;
+    document.getElementById('level-complete-screen').style.display = 'flex';
   } else {
-    // Level 2 final win
-    document.getElementById('win-status').textContent = '';
+    // Level 3 → true final win
+    document.getElementById('win-status').textContent  = '';
     document.getElementById('win-submit-btn').disabled = false;
-    document.getElementById('win-score').textContent  = 'LEVEL 2 SCORE: ' + state.score;
-    document.getElementById('win-tasks').textContent  = 'TRANSCRIPTIONS: ' + state.tasks;
-    document.getElementById('win-bonus').textContent  = `💰 CHECKS CAUGHT: ${caught}  (+${state.bossScore} bonus pts)`;
-    document.getElementById('win-total').textContent  = '★ GRAND TOTAL: ' + (total + (state._carryScore || 0));
+    document.getElementById('win-score').textContent   = 'LEVEL 3 SCORE: ' + state.score;
+    document.getElementById('win-tasks').textContent   = 'TRANSCRIPTIONS: ' + state.tasks;
+    document.getElementById('win-bonus').textContent   = `💰 CHECKS CAUGHT: ${caught}  (+${state.bossScore} bonus pts)`;
+    document.getElementById('win-total').textContent   = '★ GRAND TOTAL: ' + total;
+    document.getElementById('win-screen').querySelector('h1').textContent = '🎉 GAME COMPLETE!';
+    document.getElementById('win-screen').querySelector('.subtitle').textContent = 'You beat all 3 levels — Valid8 legend!';
     document.getElementById('win-screen').style.display = 'flex';
   }
 }
@@ -1665,6 +1764,7 @@ function startLevel(level) {
   document.getElementById('canvas-wrap').style.display           = 'block';
   document.getElementById('notification').style.visibility       = 'hidden';
   if (level === 2) showNotif('🌡 LEVEL 2 — AC OUT OF ORDER! Energy drains faster!', 3500);
+  if (level === 3) showNotif('🦇 LEVEL 3 — BAT ATTACK! Watch the skies!', 3500);
   startTimer();
   requestAnimationFrame(loop);
 }
@@ -1730,8 +1830,8 @@ document.getElementById('start-btn').addEventListener('click', showCharSelect);
 document.getElementById('char-confirm-btn').addEventListener('click', startGame);
 document.getElementById('restart-btn').addEventListener('click', showCharSelect);
 document.getElementById('restart-btn2').addEventListener('click', showCharSelect);
-document.getElementById('next-level-btn').addEventListener('click', () => startLevel(2));
-document.getElementById('replay-l1-btn').addEventListener('click', showCharSelect);
+document.getElementById('next-level-btn').addEventListener('click', () => startLevel(state.level + 1));
+document.getElementById('lc-replay-btn').addEventListener('click', () => startLevel(state.level));
 
 // Initial empty canvas draw
 resetState();
